@@ -118,9 +118,10 @@
   .phone .help { border-radius: 16px; font-size: 14px; }
   .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
 
-  /* 贴纸：Avery 94230，1.5″ × 2.75″。印刷用固定配色，深红打印更饱满 */
+  /* 贴纸：Avery 94230，1.5″ × 2.75″。印刷用固定配色，深红打印更饱满。
+     不加边框：打印稍有偏差时边框会一边粗一边细，很显眼；标签纸的边就是贴纸的边 */
   .sticker { --red: #c8102e; width: 38.1mm; height: 69.85mm; background: #fff; color: #111; flex: none;
-    border: 0.6mm solid var(--red); border-radius: 3mm; overflow: hidden; display: flex; flex-direction: column;
+    border-radius: 3mm; overflow: hidden; display: flex; flex-direction: column;
     font-family: "Helvetica Neue", Arial, "PingFang SC", sans-serif; box-shadow: 0 1px 6px rgba(0,0,0,.12); }
   .sticker svg { display: block; }
   .s-head { background: var(--red); color: #fff; text-align: center; line-height: 1.1; padding: 1.5mm 0 1.3mm; }
@@ -478,9 +479,11 @@ function refreshPreview() {
 
 // ---------- 打印预览：Avery 94230 ----------
 // Letter 纸，2 列 × 5 行共 10 个，标签在纸上横放 2.75″ × 1.5″。
-// 页边距来自 Avery 规格（上下 0.625″、左右 1″），列距和行距由此推算，需用实物核对，偏差用 X / Y 偏移校正
+// 页边距来自 Avery 规格（上下 0.625″、左右 1″），列距和行距由此推算。
+// 实物打印测试：整体偏高约 0.6mm，top 已往下补 0.6mm；换打印机仍有偏差时，用 X / Y 偏移校正
 const IN = 25.4;
-const AVERY_94230 = { cols: 2, rows: 5, w: 2.75 * IN, h: 1.5 * IN, left: 1 * IN, top: 0.625 * IN, pitchX: 3.75 * IN, pitchY: 2.0625 * IN };
+const TOP_FIX_MM = 0.6;
+const AVERY_94230 = { cols: 2, rows: 5, w: 2.75 * IN, h: 1.5 * IN, left: 1 * IN, top: 0.625 * IN + TOP_FIX_MM, pitchX: 3.75 * IN, pitchY: 2.0625 * IN };
 const sheetOpts = { outline: false, offX: 0, offY: 0 };
 let sheetItems = [], sheetNote = "";
 
