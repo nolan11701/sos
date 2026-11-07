@@ -4,12 +4,15 @@
 // 二维码里的网址。协议和域名写大写，二维码可以用字母数字模式；路径 sos/ 必须和仓库名一样保持小写
 const BASE_URL = "HTTPS://NOLAN11701.GITHUB.IO/sos/";
 
-// 合作中心：贴纸表面只印简称，求助页显示完整名称、地址和电话。不进二维码，不影响二维码密度
+// 合作中心：贴纸表面只印简称，不印电话；求助页显示完整名称、地址、服务时间和电话。不进二维码，不影响二维码密度
+// 中心只在上午 8 点到下午 3 点有人接电话，紧急情况接不了，所以求助页把它放在家属和 911 后面，并写明服务时间
 const CENTER = {
   name: "Crown City Adult Day Health Care Center",
+  nameZh: "皇冠成人日间健康中心",
   short: "Crown City ADHC Center",
   address: "122 N El Molino Ave, Pasadena, CA 91101",
   phone: "6265838822",
+  hours: "8 AM – 3 PM",
 };
 
 // 常见急救要点和过敏原用短代码存进二维码，求助页再展开成 [英文, 中文, 西班牙语]
@@ -45,9 +48,9 @@ const LIMIT = { cond: 3, alg: 2, med: 3, fam: 2 };
 // col：COND / ALG / REL / LANG 里对应的那一栏
 const SECOND = {
   zh: { col: 1, alert: "此人可能需要帮助", speaks: l => `只会说${l}`, call: r => `打给${r}`,
-    center: "日间保健中心", callCenter: "打给日间保健中心", foot: "沟通辅助工具，不是医疗设备。" },
+    center: "日间保健中心", callCenter: "打给日间保健中心", hours: "上午 8 点至下午 3 点有人接听", foot: "沟通辅助工具，不是医疗设备。" },
   es: { col: 2, alert: "Esta persona puede necesitar ayuda", speaks: l => `Solo habla ${l}`, call: r => `Llamar a su ${r}`,
-    center: "Centro de día", callCenter: "Llamar al centro de día", foot: "Herramienta de comunicación, no es un dispositivo médico." },
+    center: "Centro de día", callCenter: "Llamar al centro de día", hours: "Atienden de 8 a. m. a 3 p. m.", foot: "Herramienta de comunicación, no es un dispositivo médico." },
 };
 const secondFor = lang => lang === "S" ? SECOND.es : lang === "E" ? null : SECOND.zh;
 
@@ -84,8 +87,9 @@ function centerHTML(sec) {
   return `
     <div class="org-card">
       <div class="org-label">Day center${sec ? ` · ${sec.center}` : ""}</div>
-      <div class="org-name">${esc(CENTER.name)}</div>
+      <div class="org-name">${esc(CENTER.name)}${sec === SECOND.zh ? `<span class="zh">${esc(CENTER.nameZh)}</span>` : ""}</div>
       <div class="org-addr">${esc(CENTER.address)}</div>
+      <div class="org-hours">Open ${esc(CENTER.hours)} only${sec ? ` · ${sec.hours}` : ""}</div>
       <a class="call org" href="${telHref(CENTER.phone)}">📞 Call day center<span>${sec ? `${sec.callCenter} · ` : ""}${fmtPhone(CENTER.phone)}</span></a>
     </div>`;
 }
@@ -110,7 +114,7 @@ function helpHTML(d) {
     ${d.alg.length ? `<div class="line">⚠ <span class="k">Allergies:</span> ${d.alg.map(item(ALG)).join(", ")}</div>` : ""}
     ${d.med.length ? `<div class="line">💊 <span class="k">Medications:</span> ${d.med.map(m => esc(untoken(m))).join(", ")}</div>` : ""}
     ${d.fam.map(famBtn).join("")}
-    ${centerHTML(sec)}
     <a class="call e911" href="tel:911">📞 Call 911</a>
+    ${centerHTML(sec)}
     <div class="foot">Communication aid only, not a medical device.${sec ? `<br>${sec.foot}` : ""}</div>`;
 }

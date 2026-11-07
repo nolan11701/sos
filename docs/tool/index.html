@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@800&display=block">
 <link rel="icon" href="data:,">
 <!-- 共用文件带版本号：改了 shared.* 就把 v 加 1，避免浏览器用旧的缓存 -->
-<link rel="stylesheet" href="../shared.css?v=7">
+<link rel="stylesheet" href="../shared.css?v=8">
 <style id="pageSize"></style>
 <style>
   :root {
@@ -156,10 +156,39 @@
   .ruler i { display: block; width: 50mm; height: 2.5mm; border: 0.3mm solid #111; border-top: none;
     background: repeating-linear-gradient(90deg, #111 0 0.3mm, transparent 0.3mm 10mm); }
 
+  /* 标签机版：40 × 60 mm 热敏标签，一张一页，只印纯黑。
+     不用大块实心黑：热敏打印头印大面积黑色容易深浅不匀、标签发皱；也不用灰色，热敏机会印成网点。
+     标题叫 MEDICAL INFO，不叫 EMERGENCY：紧急情况应该打 911，这张贴纸只是提供资料 */
+  .sticker.bw { width: 40mm; height: 60mm; border-radius: 2mm; color: #000; padding: 1.4mm 1.6mm 1.4mm; }
+  /* 标题上下用双细线代替色块 */
+  .b-head { text-align: center; border-top: 0.9mm double #000; border-bottom: 0.9mm double #000; padding: 0.4mm 0 0.3mm; }
+  .b-head b { display: block; font-weight: 900; font-size: 4.3mm; line-height: 1.05; letter-spacing: .03em; white-space: nowrap; }
+  .b-head span { display: block; font-weight: 700; font-size: 2.1mm; line-height: 1.15; margin-top: 0.3mm; }
+  .b-say { font-weight: 800; line-height: 1.15; text-align: center; font-size: 2.9mm; margin: 0.8mm 0 0.6mm; }
+  .b-qr { display: flex; flex-direction: column; align-items: center; }
+  .b-cap { font-weight: 700; text-align: center; font-size: 2.2mm; line-height: 1.1; white-space: nowrap; }
+  .b-org { margin: auto 0; text-align: center; font-family: "Roboto Condensed", "Arial Narrow", sans-serif;
+    font-size: 3.4mm; font-weight: 800; line-height: 1.1; white-space: nowrap; }
+  .b-contact { border-top: 0.25mm solid #000; text-align: center; font-weight: 900; white-space: nowrap; line-height: 1.15;
+    padding-top: 0.6mm; font-size: 3.9mm; }
+  .b-contact small { display: block; color: #000; font-weight: 800; letter-spacing: .05em; font-size: 2mm; }
+  /* 打印预览：每张标签一页，下面的名字只在屏幕上显示 */
+  .lp-wrap { width: 40mm; margin: 16px auto 0; }
+  .lpage { position: relative; width: 40mm; height: 60mm; background: #fff; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,.15); }
+  .lpage .sticker { position: absolute; left: 0; top: 0; box-shadow: none; border-radius: 0; }
+  .lp-cap { font-size: 11px; line-height: 1.3; color: var(--muted); text-align: center; margin-top: 4px; }
+  .calib { position: absolute; inset: 1mm; border: 0.3mm solid #000; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3mm; text-align: center; font: 700 2.6mm/1.3 Arial, "PingFang SC", sans-serif; color: #000; }
+  .calib .ruler i { width: 30mm; }
+
   @media print {
     body { background: #fff; }
     .top, .layout, .sheetBar { display: none !important; }
     .page { margin: 0; box-shadow: none; break-after: page; }
+    .lp-wrap { margin: 0; }
+    .lp-wrap:not(:last-child) { break-after: page; }
+    .lpage { box-shadow: none; }
+    .lp-cap { display: none; }
   }
 </style>
 </head>
@@ -170,6 +199,7 @@
     <div class="bar"><i id="barFill" style="width:0"></i></div>
     <span class="count" id="count"></span>
   </div>
+  <label class="inline" style="margin:0">纸张 <small>Paper</small> <select id="fmt" style="width:auto;padding:6px 8px"></select></label>
   <button class="primary" id="printSheet">🖨 打印待打印 Print</button>
   <button id="clearPrinted">清空已打印 Clear printed</button>
 </div>
@@ -204,13 +234,23 @@
 </div>
 <div id="sheet"></div>
 
-<script src="../shared.js?v=7"></script>
+<script src="../shared.js?v=8"></script>
 <script>
 const PER_SHEET = 10;  // 一张 Avery 94230 有 10 个标签
 const MAX_COPIES = 10; // 每人最多印几份
-const QR_MM = 30;      // 贴纸上二维码边长（含留白）
 const QUIET = 2;       // 二维码四周留白（格），贴纸本身是白底
 const EC = "Q";        // 纠错等级，约 25% 被磨损仍能识别
+
+// 两种纸张：Avery 94230 用激光打印机整张印（彩色设计）；标签机 40 × 60 mm 一张一页（黑白设计）
+// qr：二维码边长（mm，含留白）
+const FORMATS = {
+  avery: { name: "Avery 94230（激光 laser）", size: "1.5″ × 2.75″（38 × 70 mm）", qr: 30, cls: "sticker" },
+  label: { name: "标签机 Label printer 40×60 黑白 B&W", size: "40 × 60 mm", qr: 26, cls: "sticker bw" },
+};
+// 选过的纸张记在这台设备上，下次打开不用再选；读不到就用 Avery
+let fmt = "avery";
+try { if (FORMATS[localStorage.getItem("sos-format")]) fmt = localStorage.getItem("sos-format"); } catch {}
+const F = () => FORMATS[fmt];
 
 // 模板：选好后，快速添加的每个人都套用这些设定；以后要加模板（例如常见病史组合）就加在这里
 const TEMPLATES = {
@@ -291,11 +331,11 @@ function buildQR(d, ec = EC) {
   const n = qr.getModuleCount();
   let p = "";
   for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) p += `M${c} ${r}h1v1h-1z`;
-  return { n, version: (n - 17) / 4, path: p, moduleMm: QR_MM / (n + QUIET * 2) };
+  return { n, version: (n - 17) / 4, path: p, moduleMm: F().qr / (n + QUIET * 2) };
 }
 
-const qrSvg = q => { const t = q.n + QUIET * 2;
-  return `<svg width="${QR_MM}mm" height="${QR_MM}mm" viewBox="${-QUIET} ${-QUIET} ${t} ${t}" shape-rendering="crispEdges"><rect x="${-QUIET}" y="${-QUIET}" width="${t}" height="${t}" fill="#fff"/><path d="${q.path}" fill="#000"/></svg>`; };
+const qrSvg = q => { const t = q.n + QUIET * 2, mm = F().qr;
+  return `<svg width="${mm}mm" height="${mm}mm" viewBox="${-QUIET} ${-QUIET} ${t} ${t}" shape-rendering="crispEdges"><rect x="${-QUIET}" y="${-QUIET}" width="${t}" height="${t}" fill="#fff"/><path d="${q.path}" fill="#000"/></svg>`; };
 
 // 贴纸表面的文字按长者的语言：说英语的不用写"英文有限"，改成请对方帮忙
 const STICKER_TEXT = {
@@ -306,6 +346,12 @@ const STICKER_TEXT = {
 };
 
 function stickerHTML(d, q) {
+  if (fmt === "label") return `
+    <div class="b-head"><b>MEDICAL INFO</b><span>Emergency? Call 911</span></div>
+    <div class="b-say">${STICKER_TEXT[d.lang] || STICKER_TEXT.M}</div>
+    <div class="b-qr">${qrSvg(q)}<div class="b-cap">Scan for medical &amp; family info</div></div>
+    <div class="b-org">${esc(CENTER.short)}</div>
+    <div class="b-contact"><small>FAMILY CONTACT</small>${fmtPhone(d.fam[0]?.p || "")}</div>`;
   return `
     <div class="s-head"><b>EMERGENCY</b></div>
     <div class="s-say">${STICKER_TEXT[d.lang] || STICKER_TEXT.M}</div>
@@ -325,7 +371,8 @@ function renderTop() {
   const stickers = toPrint().reduce((n, p) => n + p.copies, 0);
   // 进度条表示已打印的比例
   $("barFill").style.width = people.length ? `${printed / people.length * 100}%` : "0";
-  $("count").innerHTML = `共 Total <b>${people.length}</b> 人 · 已打印 Printed <b>${printed}</b> · 待打印 To print <b>${stickers}</b> 张 stickers（${Math.ceil(stickers / PER_SHEET)} 张纸 sheets）`;
+  $("count").innerHTML = `共 Total <b>${people.length}</b> 人 · 已打印 Printed <b>${printed}</b> · 待打印 To print <b>${stickers}</b> 张 stickers` +
+    (fmt === "avery" ? `（${Math.ceil(stickers / PER_SHEET)} 张纸 sheets）` : "");
   $("printSheet").disabled = !stickers;
   $("clearPrinted").disabled = !printed;
   $("clearAll").disabled = !people.length;
@@ -392,7 +439,7 @@ function renderDetail() {
   $("detail").innerHTML = `
     <div class="head"><h2>第 ${selected + 1} 位 #${selected + 1} · ${esc(displayName(p))}</h2><small id="dStatus"></small></div>
     <div class="previewRow">
-      <div class="sticker" id="dSticker"></div>
+      <div class="${F().cls}" id="dSticker"></div>
       <div class="info" id="dInfo"></div>
     </div>
     <form id="dForm" autocomplete="off" onsubmit="return false">
@@ -471,7 +518,7 @@ function refreshPreview() {
   $("dSticker").innerHTML = stickerHTML(d, q);
   $("dStatus").innerHTML = e.length ? `<span class="st-bad">⚠ ${e.join(" · ")}</span>`
     : p.printed ? `<span class="st-done">✓ 已打印 Printed</span>` : `<span class="st-ok">✓ 可打印 Ready</span>`;
-  $("dInfo").innerHTML = `<b>贴纸实际大小</b><br>Actual size · 1.5″ × 2.75″<br><br>
+  $("dInfo").innerHTML = `<b>贴纸实际大小</b><br>Actual size · ${F().size}<br><br>
     二维码 QR V${q.version}<br>每格 ${q.moduleMm.toFixed(2)} mm · <span class="${cls}">${txt}</span><br><br>
     请和长者或家属一起核对。<br>Check with the senior or family.`;
   $("dHelp").innerHTML = helpHTML(d);
@@ -489,6 +536,10 @@ let sheetItems = [], sheetNote = "";
 
 // 竖版贴纸旋转 90° 放进横放的标签；揭下来贴到手机上时方向无所谓
 function pagesHTML() {
+  // 标签机：每张标签一页；偏移用来校正标签机的进纸误差
+  if (fmt === "label") return sheetItems.map(it => `<div class="lp-wrap">
+      <div class="lpage">${it.calib ? it.calib : `<div class="${F().cls}" style="transform:translate(${sheetOpts.offX}mm,${sheetOpts.offY}mm)">${stickerHTML(it.d, it.q)}</div>`}</div>
+      <div class="lp-cap">${it.cap}</div></div>`).join("");
   const L = AVERY_94230, per = L.cols * L.rows, pages = [];
   for (let p = 0; p < sheetItems.length; p += per) {
     const cells = sheetItems.slice(p, p + per).map((it, i) => {
@@ -510,21 +561,23 @@ function showSheet(items, note, onDone) {
   sheetItems = items; sheetNote = note;
   document.body.classList.add("sheet-mode");
   window.scrollTo(0, 0);
-  $("pageSize").textContent = "@media print { @page { size: letter; margin: 0; } }";
+  const lab = fmt === "label";
+  $("pageSize").textContent = `@media print { @page { size: ${lab ? "40mm 60mm" : "letter"}; margin: 0; } }`;
   $("sheet").innerHTML = `
     <div class="sheetBar">
       ${backable ? `<button id="sheetBack">← 返回修改 Back</button>` : `<a href="../">← 入口 Home</a>`}
       <button class="primary" id="sheetPrint">🖨 打印 Print</button>
       ${backable ? `<button id="sheetDone">✓ 打印好了，标记为已打印 Mark as printed</button>` : ""}
-      <label class="inline"><input type="checkbox" id="sheetOutline" ${sheetOpts.outline ? "checked" : ""}> 印标签轮廓（对齐测试用）Outlines</label>
+      ${lab ? "" : `<label class="inline"><input type="checkbox" id="sheetOutline" ${sheetOpts.outline ? "checked" : ""}> 印标签轮廓（对齐测试用）Outlines</label>`}
       <label class="inline">偏移 Offset X <input type="number" step="0.5" id="offX" value="${sheetOpts.offX}"> Y <input type="number" step="0.5" id="offY" value="${sheetOpts.offY}"> mm</label>
-      <span class="grow">${items.length} 张贴纸 stickers · 打印选"实际大小 / 100%"、边距"无" Print at 100%, no margins</span>
+      <span class="grow">${items.length} 张${lab ? "标签 labels · 打印机选标签机，纸张 40 × 60 mm，缩放 100%、边距\"无\" Paper 40 × 60 mm, 100%, no margins"
+        : "贴纸 stickers · 打印选\"实际大小 / 100%\"、边距\"无\" Print at 100%, no margins"}</span>
     </div>
     <div id="pages">${pagesHTML()}</div>`;
   const redraw = () => { $("pages").innerHTML = pagesHTML(); };
   // 等窄体字下载完再打开打印，避免用替代字体印出去
   $("sheetPrint").onclick = () => document.fonts.ready.then(() => window.print());
-  $("sheetOutline").onchange = e => { sheetOpts.outline = e.target.checked; redraw(); };
+  if (!lab) $("sheetOutline").onchange = e => { sheetOpts.outline = e.target.checked; redraw(); };
   $("offX").oninput = e => { sheetOpts.offX = +e.target.value || 0; redraw(); };
   $("offY").oninput = e => { sheetOpts.offY = +e.target.value || 0; redraw(); };
   if (backable) {
@@ -566,6 +619,17 @@ const clearAll = () => clearPeople(() => false,
 // 打印测试页：3 组示例资料 × 4 种纠错等级，用来核对纸张对齐和扫码的密度下限
 function openTestSheet() {
   const items = [];
+  // 标签机测试页：1 张校准标签 + 5 位示例各 1 张（纠错 Q），不浪费太多标签
+  if (fmt === "label") {
+    items.push({ cap: "校准 Calibration", calib: `<div class="calib"><div>40 × 60 mm<br>校准 Calibration</div>
+      <div>边框四周应该都离边 1 mm<br>Frame ≈ 1 mm from every edge</div><div class="ruler"><i></i>这条线应正好 30 mm</div></div>` });
+    for (const demo of DEMOS) {
+      const p = newPerson(demo), d = toData(p), q = buildQR(d);
+      items.push({ d, q, cap: `${esc(p.nameZh)} ${esc(p.nameEn)}（示例 demo）<br>V${q.version} · 每格 ${q.moduleMm.toFixed(2)} mm` });
+    }
+    showSheet(items, "", null);
+    return;
+  }
   for (const demo of DEMOS) {
     const p = newPerson(demo), d = toData(p);
     for (const ec of ["L", "M", "Q", "H"]) {
@@ -581,9 +645,18 @@ function openTestSheet() {
 }
 
 // ---------- 启动 ----------
-if (new URLSearchParams(location.search).has("sheet")) {
+const sheetParam = new URLSearchParams(location.search).get("sheet");
+if (sheetParam !== null) {
+  // ?sheet 是 Avery 测试页，?sheet=label 是标签机测试页；只看网址，不改这台设备记住的纸张
+  fmt = sheetParam === "label" ? "label" : "avery";
   openTestSheet();
 } else {
+  $("fmt").innerHTML = Object.entries(FORMATS).map(([k, f]) => `<option value="${k}" ${k === fmt ? "selected" : ""}>${f.name}</option>`).join("");
+  $("fmt").onchange = e => {
+    fmt = e.target.value;
+    try { localStorage.setItem("sos-format", fmt); } catch {}
+    renderTop(); renderDetail();
+  };
   renderTpl();
   $("qRel").innerHTML = Object.entries(REL).map(([k, [en, zh]]) => `<option value="${k}" ${k === "F" ? "selected" : ""}>${zh} ${en}</option>`).join("");
   $("tpl").onclick = e => { const b = e.target.closest("[data-tpl]"); if (b) { tpl = b.dataset.tpl; renderTpl(); $("qEn").focus(); } };
