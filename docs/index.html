@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <meta name="referrer" content="no-referrer">
-<title>Emergency Info · 紧急信息</title>
+<title>Medical Info · 医疗资料</title>
 <link rel="icon" href="data:,">
 <!-- 共用文件带版本号：改了 shared.* 就把 v 加 1，避免浏览器用旧的缓存 -->
 <link rel="stylesheet" href="shared.css?v=8">
@@ -28,7 +28,7 @@ function show() {
   if (location.hash.length <= 1) {
     // 没有资料时是入口页：路人扫码打开的网址一定带 #资料，看不到这里；志愿者只要记住这个网址
     el.innerHTML = `
-      <div class="alert"><b>Emergency Info</b><span>紧急信息</span></div>
+      <div class="alert"><b>Medical Info</b><span>医疗资料</span></div>
       <p class="msg">This page shows a person's emergency information when opened from the QR code on their sticker.</p>
       <p class="msg zh">用手机相机扫描贴纸上的二维码，这里会显示长者的紧急资料。</p>
       <h2 class="hub-title">志愿者入口 · Volunteers</h2>
