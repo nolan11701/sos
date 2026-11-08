@@ -173,9 +173,22 @@
     padding-top: 0.6mm; font-size: 3.9mm; }
   .b-contact small { display: block; color: #000; font-weight: 800; letter-spacing: .05em; font-size: 2mm; }
   /* 打印预览：每张标签一页，下面的名字只在屏幕上显示 */
-  .lp-wrap { width: 40mm; margin: 16px auto 0; }
-  .lpage { position: relative; width: 40mm; height: 60mm; background: #fff; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,.15); }
+  /* 页面宽度是打印头宽度 48 mm，40 mm 的标签在中间；屏幕上用虚线标出标签的位置 */
+  .lp-wrap { margin: 16px auto 0; }
+  .lpage { position: relative; background: #fff; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,.15); }
+  .lpage .lp-face { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+  .lpage .lp-move { position: absolute; top: 0; }
+  .lpage .lp-move::after { content: ""; position: absolute; inset: 0; outline: 1px dashed #bbb; pointer-events: none; }
   .lpage .sticker { position: absolute; left: 0; top: 0; box-shadow: none; border-radius: 0; }
+  /* 40 × 30 mm 连续打印测试：左边二维码，右边编号，看每张有没有越印越偏 */
+  .t30 { position: absolute; inset: 0; display: flex; align-items: center; gap: 1.5mm; padding: 0 2mm; color: #000;
+    font: 700 2.3mm/1.25 Arial, "PingFang SC", sans-serif; }
+  .t30 svg { display: block; flex: none; }
+  .t30 b { display: block; font-size: 6mm; line-height: 1; font-weight: 900; }
+  .t30 .tick { position: absolute; width: 3mm; height: 3mm; border: 0 solid #000; }
+  .calib.c30 { gap: 1.5mm; font-size: 2.3mm; }
+  /* 校准标签四边的方向标记：拍照回来就能看出往哪边偏、偏了多少 */
+  .calib .edge { position: absolute; font-size: 2mm; line-height: 1; }
   .lp-cap { font-size: 11px; line-height: 1.3; color: var(--muted); text-align: center; margin-top: 4px; }
   .calib { position: absolute; inset: 1mm; border: 0.3mm solid #000; display: flex; flex-direction: column;
     align-items: center; justify-content: center; gap: 3mm; text-align: center; font: 700 2.6mm/1.3 Arial, "PingFang SC", sans-serif; color: #000; }
@@ -185,8 +198,10 @@
     body { background: #fff; }
     .top, .layout, .sheetBar { display: none !important; }
     .page { margin: 0; box-shadow: none; break-after: page; }
-    .lp-wrap { margin: 0; }
+    /* 比页面短 0.3 mm、多出来的裁掉，避免四舍五入后每张标签溢出成两页 */
+    .lp-wrap { margin: 0; overflow: hidden; height: var(--ph); }
     .lp-wrap:not(:last-child) { break-after: page; }
+    .lpage .lp-move::after { display: none; }
     .lpage { box-shadow: none; }
     .lp-cap { display: none; }
   }
@@ -533,13 +548,36 @@ const TOP_FIX_MM = 0.6;
 const AVERY_94230 = { cols: 2, rows: 5, w: 2.75 * IN, h: 1.5 * IN, left: 1 * IN, top: 0.625 * IN + TOP_FIX_MM, pitchX: 3.75 * IN, pitchY: 2.0625 * IN };
 const sheetOpts = { outline: false, offX: 0, offY: 0 };
 let sheetItems = [], sheetNote = "";
+let labelSize = [40, 60]; // 标签机一页的宽 × 高（mm）；只有 40 × 30 测试页会改
+// Phomemo M110 的驱动按打印头宽度 48 mm 定义纸张（PPD 里 "48 x 30 mm" 是宽 48、高 30），40 mm 宽的标签居中，内容往右移 4 mm。
+const HEAD_MM = 48;
+const pageMm = () => [HEAD_MM, labelSize[1]]; // 标签上的版面宽 × 高
+// 实测（Chrome + M110）：纸张比较宽（宽 > 高，例如 48 × 30）时，Chrome 总是把页面当成竖的 30 × 48，送去打印时再转 90°。
+// 所以这种纸张改送竖的页面，内容先转 90°，打印时被转回来正好是正的（实测：转 -90° 印出来是倒的，所以用 +90°）
+const turned = () => { const [pw, ph] = pageMm(); return pw > ph; };
+// 缩放校正（%）：实测这台 Mac + Chrome + M110 不管用哪个打印对话框，都把整页缩到 75%（30 mm 印成 22 mm），
+// 所以页面和内容一起放大到 133%，印出来正好是原尺寸。数值记在这台设备上，换电脑或打印机要用测试页重新量
+let labelScale = 100;
+try { const v = +localStorage.getItem("sos-label-scale"); if (v >= 50 && v <= 200) labelScale = v; } catch {}
+const K = () => labelScale / 100;
+// 标签机的 X / Y 偏移也记在这台设备上（实测 M110 整体偏上约 0.5 mm）；Avery 的偏移不记
+const labelOff = { x: 0, y: 0 };
+try { const o = JSON.parse(localStorage.getItem("sos-label-off") || "{}"); if (Number.isFinite(o.x)) labelOff.x = o.x; if (Number.isFinite(o.y)) labelOff.y = o.y; } catch {}
+const sentMm = () => (turned() ? [labelSize[1], HEAD_MM] : pageMm()).map(v => +(v * K()).toFixed(2)); // 实际送给 Chrome 的页面宽 × 高
 
 // 竖版贴纸旋转 90° 放进横放的标签；揭下来贴到手机上时方向无所谓
 function pagesHTML() {
   // 标签机：每张标签一页；偏移用来校正标签机的进纸误差
-  if (fmt === "label") return sheetItems.map(it => `<div class="lp-wrap">
-      <div class="lpage">${it.calib ? it.calib : `<div class="${F().cls}" style="transform:translate(${sheetOpts.offX}mm,${sheetOpts.offY}mm)">${stickerHTML(it.d, it.q)}</div>`}</div>
-      <div class="lp-cap">${it.cap}</div></div>`).join("");
+  if (fmt === "label") {
+    const [w, h] = labelSize, [pw, ph] = pageMm(), [sw, sh] = sentMm();
+    return sheetItems.map(it => {
+      const face = `<div class="lp-face" style="width:${pw}mm;height:${ph}mm;transform:scale(${K()})${turned() ? ` translate(${ph}mm,0) rotate(90deg)` : ""}">
+        <div class="lp-move" style="left:${(pw - w) / 2}mm;width:${w}mm;height:${h}mm;transform:translate(${labelOff.x}mm,${labelOff.y}mm)">
+          ${it.calib ? it.calib : `<div class="${F().cls}">${stickerHTML(it.d, it.q)}</div>`}</div></div>`;
+      return `<div class="lp-wrap" style="width:${sw}mm;--ph:${sh - 0.3}mm">
+      <div class="lpage" style="width:${sw}mm;height:${sh}mm">${face}</div>
+      <div class="lp-cap">${it.cap}</div></div>`; }).join("");
+  }
   const L = AVERY_94230, per = L.cols * L.rows, pages = [];
   for (let p = 0; p < sheetItems.length; p += per) {
     const cells = sheetItems.slice(p, p + per).map((it, i) => {
@@ -562,15 +600,19 @@ function showSheet(items, note, onDone) {
   document.body.classList.add("sheet-mode");
   window.scrollTo(0, 0);
   const lab = fmt === "label";
-  $("pageSize").textContent = `@media print { @page { size: ${lab ? "40mm 60mm" : "letter"}; margin: 0; } }`;
+  const wide = () => lab && turned();
+  const setPageSize = () => { const [sw, sh] = sentMm();
+    $("pageSize").textContent = `@media print { @page { size: ${lab ? `${sw}mm ${sh}mm` : "letter"}; margin: 0; } }`; };
+  setPageSize();
   $("sheet").innerHTML = `
     <div class="sheetBar">
       ${backable ? `<button id="sheetBack">← 返回修改 Back</button>` : `<a href="../">← 入口 Home</a>`}
       <button class="primary" id="sheetPrint">🖨 打印 Print</button>
       ${backable ? `<button id="sheetDone">✓ 打印好了，标记为已打印 Mark as printed</button>` : ""}
       ${lab ? "" : `<label class="inline"><input type="checkbox" id="sheetOutline" ${sheetOpts.outline ? "checked" : ""}> 印标签轮廓（对齐测试用）Outlines</label>`}
-      <label class="inline">偏移 Offset X <input type="number" step="0.5" id="offX" value="${sheetOpts.offX}"> Y <input type="number" step="0.5" id="offY" value="${sheetOpts.offY}"> mm</label>
-      <span class="grow">${items.length} 张${lab ? "标签 labels · 打印机选标签机，纸张 40 × 60 mm，缩放 100%、边距\"无\" Paper 40 × 60 mm, 100%, no margins"
+      ${lab ? `<label class="inline">缩放校正 Scale <input type="number" step="1" min="50" max="200" id="labScale" value="${labelScale}"> %</label>` : ""}
+      <label class="inline">偏移 Offset X <input type="number" step="0.5" id="offX" value="${lab ? labelOff.x : sheetOpts.offX}"> Y <input type="number" step="0.5" id="offY" value="${lab ? labelOff.y : sheetOpts.offY}"> mm</label>
+      <span class="grow">${items.length} 张${lab ? `标签 labels · 纸张选 ${HEAD_MM} x ${labelSize[1]} mm（打印头宽 48，标签 ${labelSize[0]} 在中间）${wide() ? `；预览里是横躺的，打印出来是正的` : ""}，缩放 100%、边距"无" Paper ${HEAD_MM} x ${labelSize[1]} mm, 100%, no margins`
         : "贴纸 stickers · 打印选\"实际大小 / 100%\"、边距\"无\" Print at 100%, no margins"}</span>
     </div>
     <div id="pages">${pagesHTML()}</div>`;
@@ -578,8 +620,18 @@ function showSheet(items, note, onDone) {
   // 等窄体字下载完再打开打印，避免用替代字体印出去
   $("sheetPrint").onclick = () => document.fonts.ready.then(() => window.print());
   if (!lab) $("sheetOutline").onchange = e => { sheetOpts.outline = e.target.checked; redraw(); };
-  $("offX").oninput = e => { sheetOpts.offX = +e.target.value || 0; redraw(); };
-  $("offY").oninput = e => { sheetOpts.offY = +e.target.value || 0; redraw(); };
+  if (lab) $("labScale").onchange = e => {
+    const v = Math.round(+e.target.value);
+    if (v >= 50 && v <= 200) { labelScale = v; try { localStorage.setItem("sos-label-scale", String(v)); } catch {} }
+    e.target.value = labelScale; setPageSize(); redraw();
+  };
+  const setOff = (k, v) => {
+    if (lab) { labelOff[k] = v; try { localStorage.setItem("sos-label-off", JSON.stringify(labelOff)); } catch {} }
+    else sheetOpts[k === "x" ? "offX" : "offY"] = v;
+    redraw();
+  };
+  $("offX").oninput = e => setOff("x", +e.target.value || 0);
+  $("offY").oninput = e => setOff("y", +e.target.value || 0);
   if (backable) {
     const back = () => { document.body.classList.remove("sheet-mode"); $("sheet").innerHTML = ""; $("pageSize").textContent = ""; };
     $("sheetBack").onclick = back;
@@ -616,12 +668,35 @@ const clearPrinted = () => { const n = people.filter(p => p.printed).length;
 const clearAll = () => clearPeople(() => false,
   `清空全部 ${people.length} 人的资料，包括还没打印的？\nClear all ${people.length} people, including unprinted?`);
 
+// 校准标签四边的方向标记
+const EDGES = `<span class="edge" style="top:.6mm;left:50%;transform:translateX(-50%)">上 TOP</span><span class="edge" style="bottom:.6mm;left:50%;transform:translateX(-50%)">下 BOTTOM</span>
+  <span class="edge" style="left:.6mm;top:50%;transform:translateY(-50%)">左 L</span><span class="edge" style="right:.6mm;top:50%;transform:translateY(-50%)">右 R</span>`;
+
+// 40 × 30 mm 连续打印测试（?sheet=label30）：只用来测标签机从浏览器连续打印会不会越印越偏，不是正式贴纸。
+// 第 1 张校准，后面 5 张是示例二维码（24 mm，比正式版的 26 mm 还小一点，能扫说明正式版更稳）+ 编号；四角的直角标记应该离边一样远
+function openTest30() {
+  fmt = "label"; labelSize = [40, 30];
+  const N = 6, mm = 24;
+  const corners = ["left:1mm;top:1mm;border-left-width:.3mm;border-top-width:.3mm", "right:1mm;top:1mm;border-right-width:.3mm;border-top-width:.3mm",
+    "left:1mm;bottom:1mm;border-left-width:.3mm;border-bottom-width:.3mm", "right:1mm;bottom:1mm;border-right-width:.3mm;border-bottom-width:.3mm"]
+    .map(s => `<i class="tick" style="${s}"></i>`).join("");
+  const items = [{ cap: `1/${N} 校准 Calibration`, calib: `<div class="calib c30">${EDGES}
+    <div>40 × 30 mm · 1/${N}<br>边框离四边都约 1 mm</div><div class="ruler"><i></i>这条线应正好 30 mm</div></div>` }];
+  DEMOS.forEach((demo, i) => {
+    const d = toData(newPerson(demo)), q = buildQR(d), t = q.n + QUIET * 2;
+    const svg = `<svg width="${mm}mm" height="${mm}mm" viewBox="${-QUIET} ${-QUIET} ${t} ${t}" shape-rendering="crispEdges"><path d="${q.path}" fill="#000"/></svg>`;
+    items.push({ cap: `${i + 2}/${N} · V${q.version} · 每格 ${(mm / t).toFixed(2)} mm`,
+      calib: `<div class="t30">${corners}${svg}<div><b>${i + 2}/${N}</b>V${q.version}<br>${(mm / t).toFixed(2)} mm</div></div>` });
+  });
+  showSheet(items, "", null);
+}
+
 // 打印测试页：3 组示例资料 × 4 种纠错等级，用来核对纸张对齐和扫码的密度下限
 function openTestSheet() {
   const items = [];
   // 标签机测试页：1 张校准标签 + 5 位示例各 1 张（纠错 Q），不浪费太多标签
   if (fmt === "label") {
-    items.push({ cap: "校准 Calibration", calib: `<div class="calib"><div>40 × 60 mm<br>校准 Calibration</div>
+    items.push({ cap: "校准 Calibration", calib: `<div class="calib">${EDGES}<div>40 × 60 mm<br>校准 Calibration</div>
       <div>边框四周应该都离边 1 mm<br>Frame ≈ 1 mm from every edge</div><div class="ruler"><i></i>这条线应正好 30 mm</div></div>` });
     for (const demo of DEMOS) {
       const p = newPerson(demo), d = toData(p), q = buildQR(d);
@@ -648,8 +723,8 @@ function openTestSheet() {
 const sheetParam = new URLSearchParams(location.search).get("sheet");
 if (sheetParam !== null) {
   // ?sheet 是 Avery 测试页，?sheet=label 是标签机测试页；只看网址，不改这台设备记住的纸张
-  fmt = sheetParam === "label" ? "label" : "avery";
-  openTestSheet();
+  if (sheetParam === "label30") openTest30();
+  else { fmt = sheetParam === "label" ? "label" : "avery"; openTestSheet(); }
 } else {
   $("fmt").innerHTML = Object.entries(FORMATS).map(([k, f]) => `<option value="${k}" ${k === fmt ? "selected" : ""}>${f.name}</option>`).join("");
   $("fmt").onchange = e => {
