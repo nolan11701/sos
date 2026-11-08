@@ -96,7 +96,9 @@
   .tableActions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 
   /* 右侧：选中的人 */
-  .detail { position: sticky; top: 72px; }
+  /* 右侧详细资料单独滚动：固定在视口里，内容超出时只滚这一栏，左边的名单不动 */
+  .detail { position: sticky; top: 72px; max-height: calc(100vh - 88px); overflow-y: auto; overscroll-behavior: contain; }
+  @media (max-width: 980px) { .detail { position: static; max-height: none; overflow: visible; } }
   .detail .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .detail .head h2 { margin: 0; }
   .previewRow { display: flex; gap: 16px; align-items: flex-start; margin: 12px 0 4px; flex-wrap: wrap; }
@@ -454,6 +456,7 @@ function quickAdd() {
 // ---------- 右侧：选中的人 ----------
 function renderDetail() {
   const p = people[selected];
+  $("detail").scrollTop = 0; // 换了一个人，右栏回到顶部
   if (!p) {
     $("detail").innerHTML = `<h2>详细资料 <small>Details</small></h2>
       <div class="empty">在左边名单里点一个人，<br>就能在这里补充病史、过敏、用药，并预览贴纸。<br><br>Select a person to edit details and preview the sticker.</div>`;
