@@ -267,11 +267,11 @@ const EC = "Q";        // 纠错等级，约 25% 被磨损仍能识别
 // 两种纸张：Avery 94230 用激光打印机整张印（彩色设计）；标签机 40 × 60 mm 一张一页（黑白设计）
 // qr：二维码边长（mm，含留白）
 const FORMATS = {
-  avery: { name: "Avery 94230（激光 laser）", size: "1.5″ × 2.75″（38 × 70 mm）", qr: 30, cls: "sticker" },
   label: { name: "标签机 Label printer 40×60 黑白 B&W", size: "40 × 60 mm", qr: 25, cls: "sticker bw" },
+  avery: { name: "Avery 94230（激光 laser）", size: "1.5″ × 2.75″（38 × 70 mm）", qr: 30, cls: "sticker" },
 };
-// 选过的纸张记在这台设备上，下次打开不用再选；读不到就用 Avery
-let fmt = "avery";
+// 默认用标签机 40 × 60 黑白版（现场主力）；选过的纸张记在这台设备上，下次打开不用再选
+let fmt = "label";
 try { if (FORMATS[localStorage.getItem("sos-format")]) fmt = localStorage.getItem("sos-format"); } catch {}
 const F = () => FORMATS[fmt];
 // 标签机版的标题样式：solid 黑底白字（默认），lines 上下双细线（黑底印得不匀时改用）。记在这台设备上
