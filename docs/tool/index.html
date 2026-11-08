@@ -156,20 +156,26 @@
   .ruler i { display: block; width: 50mm; height: 2.5mm; border: 0.3mm solid #111; border-top: none;
     background: repeating-linear-gradient(90deg, #111 0 0.3mm, transparent 0.3mm 10mm); }
 
-  /* 标签机版：40 × 60 mm 热敏标签，一张一页，只印纯黑。
-     不用大块实心黑：热敏打印头印大面积黑色容易深浅不匀、标签发皱；也不用灰色，热敏机会印成网点。
+  /* 标签机版：40 × 60 mm 热敏标签，一张一页，只印纯黑，不用灰色（热敏机会印成网点）。
      标题叫 MEDICAL INFO，不叫 EMERGENCY：紧急情况应该打 911，这张贴纸只是提供资料 */
-  .sticker.bw { width: 40mm; height: 60mm; border-radius: 2mm; color: #000; padding: 1.4mm 1.6mm 1.4mm; }
-  /* 标题上下用双细线代替色块 */
-  .b-head { text-align: center; border-top: 0.9mm double #000; border-bottom: 0.9mm double #000; padding: 0.4mm 0 0.3mm; }
-  .b-head b { display: block; font-weight: 900; font-size: 4.3mm; line-height: 1.05; letter-spacing: .03em; white-space: nowrap; }
-  .b-head span { display: block; font-weight: 700; font-size: 2.1mm; line-height: 1.15; margin-top: 0.3mm; }
-  .b-say { font-weight: 800; line-height: 1.15; text-align: center; font-size: 2.9mm; margin: 0.8mm 0 0.6mm; }
+  .sticker.bw { width: 40mm; height: 60mm; border-radius: 2mm; color: #000; padding: 1.4mm 1.6mm 1.4mm; overflow: visible; }
+  /* 标题黑底白字：热敏机不耗墨，顶部一条黑底不费耗材，比细线醒目。
+     黑底往标签外多印 1 mm（出血），打印稍有偏差也不会在边上露出白缝；印到底纸上的部分不显色 */
+  .b-head { background: #000; color: #fff; text-align: center; margin: -2.4mm -2.6mm 0; padding: 2.1mm 2.6mm 1.1mm; }
+  .b-head b { display: block; font-weight: 900; font-size: 4.6mm; line-height: 1.05; letter-spacing: .04em; white-space: nowrap; }
+  .b-head span { display: block; font-weight: 800; font-size: 2.3mm; line-height: 1.15; margin-top: 0.4mm; }
+  /* 备选：上下双细线，黑底印得深浅不匀时在打印预览里切换 */
+  .bw.lines .b-head { background: none; color: #000; margin: 0; padding: 0.4mm 0 0.3mm;
+    border-top: 0.9mm double #000; border-bottom: 0.9mm double #000; }
+  .bw.lines .b-head b { font-size: 4.3mm; letter-spacing: .03em; }
+  .bw.lines .b-head span { font-weight: 700; font-size: 2.1mm; margin-top: 0.3mm; }
+  .b-say { font-weight: 800; line-height: 1.15; text-align: center; font-size: 2.9mm; margin: 0.4mm 0 0.4mm; }
   .b-qr { display: flex; flex-direction: column; align-items: center; }
   .b-cap { font-weight: 700; text-align: center; font-size: 2.2mm; line-height: 1.1; white-space: nowrap; }
-  .b-org { margin: auto 0; text-align: center; font-family: "Roboto Condensed", "Arial Narrow", sans-serif;
+  /* 中心名称放在标题下面，离底部的家属电话远一点，免得路人以为那是中心的电话 */
+  .b-org { margin: 0.6mm 0 0; text-align: center; font-family: "Roboto Condensed", "Arial Narrow", sans-serif;
     font-size: 3.4mm; font-weight: 800; line-height: 1.1; white-space: nowrap; }
-  .b-contact { border-top: 0.25mm solid #000; text-align: center; font-weight: 900; white-space: nowrap; line-height: 1.15;
+  .b-contact { margin-top: auto; border-top: 0.25mm solid #000; text-align: center; font-weight: 900; white-space: nowrap; line-height: 1.15;
     padding-top: 0.6mm; font-size: 3.9mm; }
   .b-contact small { display: block; color: #000; font-weight: 800; letter-spacing: .05em; font-size: 2mm; }
   /* 打印预览：每张标签一页，下面的名字只在屏幕上显示 */
@@ -196,6 +202,8 @@
 
   @media print {
     body { background: #fff; }
+    /* Chrome 默认不印背景色（"背景图形"没勾时），贴纸上的色块和标尺刻度都要强制印出来 */
+    #sheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .top, .layout, .sheetBar { display: none !important; }
     .page { margin: 0; box-shadow: none; break-after: page; }
     /* 比页面短 0.3 mm、多出来的裁掉，避免四舍五入后每张标签溢出成两页 */
@@ -260,12 +268,16 @@ const EC = "Q";        // 纠错等级，约 25% 被磨损仍能识别
 // qr：二维码边长（mm，含留白）
 const FORMATS = {
   avery: { name: "Avery 94230（激光 laser）", size: "1.5″ × 2.75″（38 × 70 mm）", qr: 30, cls: "sticker" },
-  label: { name: "标签机 Label printer 40×60 黑白 B&W", size: "40 × 60 mm", qr: 26, cls: "sticker bw" },
+  label: { name: "标签机 Label printer 40×60 黑白 B&W", size: "40 × 60 mm", qr: 25, cls: "sticker bw" },
 };
 // 选过的纸张记在这台设备上，下次打开不用再选；读不到就用 Avery
 let fmt = "avery";
 try { if (FORMATS[localStorage.getItem("sos-format")]) fmt = localStorage.getItem("sos-format"); } catch {}
 const F = () => FORMATS[fmt];
+// 标签机版的标题样式：solid 黑底白字（默认），lines 上下双细线（黑底印得不匀时改用）。记在这台设备上
+let headStyle = "solid";
+try { if (localStorage.getItem("sos-label-head") === "lines") headStyle = "lines"; } catch {}
+const stickerCls = () => F().cls + (fmt === "label" && headStyle === "lines" ? " lines" : "");
 
 // 模板：选好后，快速添加的每个人都套用这些设定；以后要加模板（例如常见病史组合）就加在这里
 const TEMPLATES = {
@@ -363,9 +375,9 @@ const STICKER_TEXT = {
 function stickerHTML(d, q) {
   if (fmt === "label") return `
     <div class="b-head"><b>MEDICAL INFO</b><span>Emergency? Call 911</span></div>
+    <div class="b-org">${esc(CENTER.short)}</div>
     <div class="b-say">${STICKER_TEXT[d.lang] || STICKER_TEXT.M}</div>
     <div class="b-qr">${qrSvg(q)}<div class="b-cap">Scan for medical &amp; family info</div></div>
-    <div class="b-org">${esc(CENTER.short)}</div>
     <div class="b-contact"><small>FAMILY CONTACT</small>${fmtPhone(d.fam[0]?.p || "")}</div>`;
   return `
     <div class="s-head"><b>EMERGENCY</b></div>
@@ -454,7 +466,7 @@ function renderDetail() {
   $("detail").innerHTML = `
     <div class="head"><h2>第 ${selected + 1} 位 #${selected + 1} · ${esc(displayName(p))}</h2><small id="dStatus"></small></div>
     <div class="previewRow">
-      <div class="${F().cls}" id="dSticker"></div>
+      <div class="${stickerCls()}" id="dSticker"></div>
       <div class="info" id="dInfo"></div>
     </div>
     <form id="dForm" autocomplete="off" onsubmit="return false">
@@ -573,7 +585,7 @@ function pagesHTML() {
     return sheetItems.map(it => {
       const face = `<div class="lp-face" style="width:${pw}mm;height:${ph}mm;transform:scale(${K()})${turned() ? ` translate(${ph}mm,0) rotate(90deg)` : ""}">
         <div class="lp-move" style="left:${(pw - w) / 2}mm;width:${w}mm;height:${h}mm;transform:translate(${labelOff.x}mm,${labelOff.y}mm)">
-          ${it.calib ? it.calib : `<div class="${F().cls}">${stickerHTML(it.d, it.q)}</div>`}</div></div>`;
+          ${it.calib ? it.calib : `<div class="${stickerCls()}">${stickerHTML(it.d, it.q)}</div>`}</div></div>`;
       return `<div class="lp-wrap" style="width:${sw}mm;--ph:${sh - 0.3}mm">
       <div class="lpage" style="width:${sw}mm;height:${sh}mm">${face}</div>
       <div class="lp-cap">${it.cap}</div></div>`; }).join("");
@@ -610,6 +622,9 @@ function showSheet(items, note, onDone) {
       <button class="primary" id="sheetPrint">🖨 打印 Print</button>
       ${backable ? `<button id="sheetDone">✓ 打印好了，标记为已打印 Mark as printed</button>` : ""}
       ${lab ? "" : `<label class="inline"><input type="checkbox" id="sheetOutline" ${sheetOpts.outline ? "checked" : ""}> 印标签轮廓（对齐测试用）Outlines</label>`}
+      ${lab ? `<label class="inline">标题 Header <select id="headStyle" style="width:auto;padding:4px 6px">
+        <option value="solid" ${headStyle === "solid" ? "selected" : ""}>黑底白字 Solid</option>
+        <option value="lines" ${headStyle === "lines" ? "selected" : ""}>双细线 Lines</option></select></label>` : ""}
       ${lab ? `<label class="inline">缩放校正 Scale <input type="number" step="1" min="50" max="200" id="labScale" value="${labelScale}"> %</label>` : ""}
       <label class="inline">偏移 Offset X <input type="number" step="0.5" id="offX" value="${lab ? labelOff.x : sheetOpts.offX}"> Y <input type="number" step="0.5" id="offY" value="${lab ? labelOff.y : sheetOpts.offY}"> mm</label>
       <span class="grow">${items.length} 张${lab ? `标签 labels · 纸张选 ${HEAD_MM} x ${labelSize[1]} mm（打印头宽 48，标签 ${labelSize[0]} 在中间）${wide() ? `；预览里是横躺的，打印出来是正的` : ""}，缩放 100%、边距"无" Paper ${HEAD_MM} x ${labelSize[1]} mm, 100%, no margins`
@@ -620,6 +635,11 @@ function showSheet(items, note, onDone) {
   // 等窄体字下载完再打开打印，避免用替代字体印出去
   $("sheetPrint").onclick = () => document.fonts.ready.then(() => window.print());
   if (!lab) $("sheetOutline").onchange = e => { sheetOpts.outline = e.target.checked; redraw(); };
+  if (lab) $("headStyle").onchange = e => {
+    headStyle = e.target.value === "lines" ? "lines" : "solid";
+    try { localStorage.setItem("sos-label-head", headStyle); } catch {}
+    redraw();
+  };
   if (lab) $("labScale").onchange = e => {
     const v = Math.round(+e.target.value);
     if (v >= 50 && v <= 200) { labelScale = v; try { localStorage.setItem("sos-label-scale", String(v)); } catch {} }
@@ -673,7 +693,7 @@ const EDGES = `<span class="edge" style="top:.6mm;left:50%;transform:translateX(
   <span class="edge" style="left:.6mm;top:50%;transform:translateY(-50%)">左 L</span><span class="edge" style="right:.6mm;top:50%;transform:translateY(-50%)">右 R</span>`;
 
 // 40 × 30 mm 连续打印测试（?sheet=label30）：只用来测标签机从浏览器连续打印会不会越印越偏，不是正式贴纸。
-// 第 1 张校准，后面 5 张是示例二维码（24 mm，比正式版的 26 mm 还小一点，能扫说明正式版更稳）+ 编号；四角的直角标记应该离边一样远
+// 第 1 张校准，后面 5 张是示例二维码（24 mm，比正式版的 25 mm 还小一点，能扫说明正式版更稳）+ 编号；四角的直角标记应该离边一样远
 function openTest30() {
   fmt = "label"; labelSize = [40, 30];
   const N = 6, mm = 24;
@@ -697,7 +717,7 @@ function openTestSheet() {
   // 标签机测试页：1 张校准标签 + 5 位示例各 1 张（纠错 Q），不浪费太多标签
   if (fmt === "label") {
     items.push({ cap: "校准 Calibration", calib: `<div class="calib">${EDGES}<div>40 × 60 mm<br>校准 Calibration</div>
-      <div>边框四周应该都离边 1 mm<br>Frame ≈ 1 mm from every edge</div><div class="ruler"><i></i>这条线应正好 30 mm</div></div>` });
+      <div>边框离四边都约 1 mm<br>Frame ≈ 1 mm<br>from each edge</div><div class="ruler"><i></i>这条线应正好 30 mm</div></div>` });
     for (const demo of DEMOS) {
       const p = newPerson(demo), d = toData(p), q = buildQR(d);
       items.push({ d, q, cap: `${esc(p.nameZh)} ${esc(p.nameEn)}（示例 demo）<br>V${q.version} · 每格 ${q.moduleMm.toFixed(2)} mm` });
