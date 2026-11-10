@@ -576,8 +576,8 @@ let labelScale = 100;
 try { const v = +localStorage.getItem("sos-label-scale"); if (v >= 50 && v <= 200) labelScale = v; } catch {}
 const K = () => labelScale / 100;
 // 标签机的 X / Y 偏移也记在这台设备上；Avery 的偏移不记。
-// 默认 Y 0.5：实测 M110 印 40 × 30 和 40 × 60 都整体偏上约 0.5 mm，新设备不用先校准
-const labelOff = { x: 0, y: 0.5 };
+// 默认 X -0.5、Y 0.5：实测 M110 印 40 × 60 整体偏右、偏上约 0.5 mm，新设备不用先校准
+const labelOff = { x: -0.5, y: 0.5 };
 try { const o = JSON.parse(localStorage.getItem("sos-label-off") || "{}"); if (Number.isFinite(o.x)) labelOff.x = o.x; if (Number.isFinite(o.y)) labelOff.y = o.y; } catch {}
 const sentMm = () => (turned() ? [labelSize[1], HEAD_MM] : pageMm()).map(v => +(v * K()).toFixed(2)); // 实际送给 Chrome 的页面宽 × 高
 
